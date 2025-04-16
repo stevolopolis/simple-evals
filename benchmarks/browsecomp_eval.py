@@ -10,7 +10,7 @@ import random
 import re
 import pandas
 from . import common
-from ..types import Eval, EvalResult, SamplerBase, SingleEvalResult
+from ..types import Eval, EvalResult, SamplerBase, SamplerBaseWithId, SingleEvalResult, SingleResult, SingleProblem 
 
 # from: https://github.com/centerforaisafety/hle/blob/7b6be5aad6f9b43af3857de7867f3b52f6e4acb3/hle_eval/run_model_predictions.py#L11
 QUERY_TEMPLATE = """
@@ -68,6 +68,10 @@ class BrowseCompEval(Eval):
         df = pandas.read_csv(
             "https://openaipublic.blob.core.windows.net/simple-evals/browse_comp_test_set.csv"
         )
+
+        # Create index column
+        df['id'] = df.index
+
         examples = [row.to_dict() for _, row in df.iterrows()]
         if num_examples:
             assert n_repeats == 1, "n_repeats only supported when max_examples = None"
@@ -91,6 +95,10 @@ class BrowseCompEval(Eval):
         match = re.search(r"correct: (yes|no)", grading_response)
         return match.group(0) if match else "no"  # Default to "no" if no match
 
+    @property
+    def name(self):
+        return "browsecomp"
+
     def __call__(self, sampler: SamplerBase) -> EvalResult:
             def fn(row: dict):
                 problem = decrypt(row.get("problem", ""), row.get("canary", ""))
@@ -98,7 +106,13 @@ class BrowseCompEval(Eval):
                 prompt_messages = [
                     sampler._pack_message(content=QUERY_TEMPLATE.format(Question=problem), role="user")
                 ]
-                response_text = sampler(prompt_messages)
+                
+                # If sampler is a SamplerBaseWithId, we need to pass the id to the __call__ method
+                if isinstance(sampler, SamplerBaseWithId):
+                    response_text = sampler(prompt_messages, row["id"])
+                else:
+                    response_text = sampler(prompt_messages)
+
                 grade_result = self.grade_sample(problem, answer, response_text)
 
                 # Metrics based on grading response
@@ -116,13 +130,33 @@ class BrowseCompEval(Eval):
                     extracted_answer=response_text,
                 )
                 convo = prompt_messages + [dict(content=response_text, role="assistant")]
-                return SingleEvalResult(html=html, score=score, convo=convo, metrics={
+
+                single_eval_result = SingleEvalResult(html=html, score=score, convo=convo, metrics={
                     "is_correct": is_correct,
                     "is_incorrect": is_incorrect,
                 })
 
-            # Run evaluation and collect results
-            results = common.map_with_progress(fn, self.examples)
+                # If sampler is a SamplerBaseWithId, we need to return a SingleResult
+                if isinstance(sampler, SamplerBaseWithId):
+                    single_result = SingleResult(
+                        task=self.name,
+                        id=row["id"],
+                        problem=SingleProblem(instruction=QUERY_TEMPLATE, input=problem, target=answer),
+                        output=response_text,
+                        answer=grade_result,
+                        score=score
+                    )
+                    return single_eval_result, single_result
+                
+                return single_eval_result
+
+            # If sampler is a SamplerBaseWithId, we need to return a list of SingleEvalResult and SingleResult
+            if isinstance(sampler, SamplerBaseWithId):
+                results_tmp = common.map_with_progress(fn, self.examples)
+                results, single_results = zip(*results_tmp)
+            else:
+                # Run evaluation and collect results
+                results = common.map_with_progress(fn, self.examples)
 
             # Aggregate metrics
             aggregate_metrics = {
@@ -138,5 +172,8 @@ class BrowseCompEval(Eval):
             }
             
             print(f"Accuracy: {output_d['accuracy']:.3f}")
+            
+            if isinstance(sampler, SamplerBaseWithId):
+                return common.aggregate_results(results), single_results
             
             return common.aggregate_results(results)
