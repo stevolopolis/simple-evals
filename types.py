@@ -15,6 +15,17 @@ class SamplerBase:
         raise NotImplementedError
 
 
+class SamplerBaseWithId(SamplerBase):
+    """
+    SamplerBase wrapper that adds an id parameter to the __call__ method.
+    Used for custom models with traces.
+    """
+
+    def __call__(self, message_list: MessageList, id: int) -> str:
+        raise NotImplementedError
+
+
+
 @dataclass
 class EvalResult:
     """
@@ -55,6 +66,7 @@ class SingleResult:
     Result of evaluating a single sample. For logging purposes only.
     """
     task: str
+    id: int
     problem: SingleProblem
     output: Any
     answer: Any

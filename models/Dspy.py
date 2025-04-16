@@ -8,7 +8,7 @@ class DspyModel(BaseModel):
     def model_type(self):
         return "Dspy"
     
-    def run(self, messages):
+    def run(self, messages, id: int):
         lm = dspy.LM(self.model_id)
 
         with dspy.context(lm=lm):
@@ -25,7 +25,7 @@ class DspyCoTModel(BaseModel):
     def model_type(self):
         return "CoT-Dspy"
     
-    def run(self, messages):
+    def run(self, messages, id: int):
         lm = dspy.LM(self.model_id)
 
         with dspy.context(lm=lm):
@@ -48,7 +48,7 @@ class DspyPotModel(BaseModel):
     def model_type(self):
         return "Pot-Dspy"
     
-    def run(self, messages):
+    def run(self, messages, id: int):
         lm = dspy.LM(self.model_id)
 
         with dspy.context(lm=lm):

@@ -6,11 +6,12 @@ class LiteModel(BaseModel):
     def model_type(self):
         return "Vanilla"
     
-    def run(self, messages):
+    def run(self, messages, id: int):
         messages.insert(0, self.system_prompt)
         res = self.completion(
             model=self.model_id,
             messages=messages,
+            id=id
         )
         return res
 
@@ -20,7 +21,7 @@ class CoTModel(BaseModel):
     def model_type(self):
         return "CoT"
 
-    def run(self, messages):
+    def run(self, messages, id: int):
         messages.insert(0, self.system_prompt)
         # append cot prompt to final message
         cot_prompt = "\nFirst, think carefully step by step and then answer the question."
@@ -29,7 +30,8 @@ class CoTModel(BaseModel):
         # first call to elicit cot
         thoughts = self.completion(
             model=self.model_id,
-            messages=messages
+            messages=messages,
+            id=id
         )
 
         # append cot thoughts
@@ -47,7 +49,8 @@ class CoTModel(BaseModel):
         # second call to get final answer
         res = self.completion(
             model=self.model_id,
-            messages=messages
+            messages=messages,
+            id=id
         )
         return res
     

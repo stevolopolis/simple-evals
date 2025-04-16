@@ -4,6 +4,7 @@ Dan Hendrycks, Collin Burns, Saurav Kadavath, Akul Arora, Steven Basart, Eric Ta
 https://arxiv.org/abs/2103.03874
 """
 
+import copy
 import random
 import re
 from typing import Literal, List, Tuple, Union
@@ -12,7 +13,7 @@ import pandas
 
 from . import common
 from .common import ANSWER_PATTERN, HTML_JINJA, check_equality
-from ..types import Eval, EvalResult, SamplerBase, SingleEvalResult, SingleResult, SingleProblem
+from ..types import Eval, EvalResult, SamplerBase, SamplerBaseWithId, SingleEvalResult, SingleResult, SingleProblem
 
 QUERY_TEMPLATE = """
 Solve the following math problem step by step. The last line of your response should be of the form Answer: $ANSWER (without quotes) where $ANSWER is the answer to the problem.
@@ -34,6 +35,10 @@ class MathEval(Eval):
         df = pandas.read_csv(
             f"https://openaipublic.blob.core.windows.net/simple-evals/{split}.csv"
         )
+        
+        # Create index column
+        df['id'] = df.index
+
         examples = [row.to_dict() for _, row in df.iterrows()]
         if num_examples:
             assert n_repeats == 1, "n_repeats only supported for num_examples = None"
@@ -42,12 +47,17 @@ class MathEval(Eval):
         self.examples = examples * n_repeats
         self.equality_checker = equality_checker
 
-    def __call__(self, sampler: SamplerBase, trace: bool = False) -> Union[EvalResult, Tuple[EvalResult, List[SingleEvalResult]]]:
+    def __call__(self, sampler: Union[SamplerBase, SamplerBaseWithId]) -> Union[EvalResult, Tuple[EvalResult, List[SingleEvalResult]]]:
         def fn(row: dict):
             prompt_messages = [
                 sampler._pack_message(content=QUERY_TEMPLATE.format(**row), role="user")
             ]
-            response_text = sampler(prompt_messages)
+            # If sampler is a SamplerBaseWithId, we need to pass the id to the __call__ method
+            if isinstance(sampler, SamplerBaseWithId):
+                response_text = sampler(prompt_messages, row["id"])
+            else:
+                response_text = sampler(prompt_messages)
+
             match = re.search(ANSWER_PATTERN, response_text)
             extracted_answer = match.group(1) if match else None
             score = float(check_equality(self.equality_checker, row["Answer"], extracted_answer))
@@ -62,22 +72,25 @@ class MathEval(Eval):
 
             single_eval_result = SingleEvalResult(html=html, score=score, convo=convo)
 
-            if trace:
+            # If sampler is a SamplerBaseWithId, we need to return a SingleResult
+            if isinstance(sampler, SamplerBaseWithId):
                 single_result = SingleResult(
                     task="math",
+                    id=row["id"],
                     problem=SingleProblem(instruction=QUERY_TEMPLATE, input=row["Question"], target=row["Answer"]),
                     output=response_text,
                     answer=extracted_answer,
                     score=score
                 )
                 return single_eval_result, single_result
-            else:
-                return single_eval_result
 
-        if trace:
+            return single_eval_result
+
+        # If sampler is a SamplerBaseWithId, we need to return a list of SingleEvalResult and SingleResult
+        if isinstance(sampler, SamplerBaseWithId):
             results_tmp = common.map_with_progress(fn, self.examples)
             results, single_results = zip(*results_tmp)
             return common.aggregate_results(results), single_results
-        else:
-            results = common.map_with_progress(fn, self.examples)
-            return common.aggregate_results(results)
+
+        results = common.map_with_progress(fn, self.examples)
+        return common.aggregate_results(results)
