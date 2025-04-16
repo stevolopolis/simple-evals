@@ -1,5 +1,5 @@
 from .base import BaseModel 
-
+import copy
 
 class LiteModel(BaseModel):
     @property

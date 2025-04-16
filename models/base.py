@@ -87,6 +87,9 @@ class BaseModel(SamplerBaseWithId):
         raise NotImplementedError("The run method must be implemented by the subclass.")
     
     def __call__(self, messages, id: int):
+        # copy messages to avoid modifying the original messages
+        messages = copy.deepcopy(messages)
+        
         # Check if id is already in traces. If yes, it means we are re-running with a different seed.
         # In this case, we will append the seed number to the id.
         if id in self.traces:
