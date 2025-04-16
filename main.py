@@ -16,6 +16,8 @@ from .benchmarks.mgsm_eval import MGSMEval
 from .benchmarks.mmlu_eval import MMLUEval
 from .benchmarks.simpleqa_eval import SimpleQAEval
 from .benchmarks.gameof24_eval import Gameof24Eval
+from .benchmarks.bbeh_eval import BBEHEval
+from .benchmarks.bbh_eval import BBHEval
 from .sampler.chat_completion_sampler import (
     ChatCompletionSampler,
 )
@@ -31,11 +33,15 @@ app = Typer()
 grading_sampler = ChatCompletionSampler(model="gpt-4o")
 equality_checker = ChatCompletionSampler(model="gpt-4-turbo-preview")
 
-n_seeds = 2
+n_seeds = 1
 
 def get_evals(eval_name, debug_mode):
     num_examples = 5 if debug_mode else None
-    # Set num_examples = None to reproduce full evals
+
+    # Parse subtask from eval_name for bbeh
+    if "bbeh" in eval_name or "bbh" in eval_name:
+        eval_name, subtask_name = eval_name.split("-")
+
     match eval_name:
         case "mmlu":
             return MMLUEval(num_examples=num_examples)
@@ -80,6 +86,18 @@ def get_evals(eval_name, debug_mode):
             return Gameof24Eval(
                 num_examples=num_examples,
                 n_repeats=1 if debug_mode else n_seeds,
+            )
+        case "bbeh":
+            return BBEHEval(
+                num_examples=num_examples,
+                n_repeats=1 if debug_mode else n_seeds,
+                subtask=subtask_name,
+            )
+        case "bbh":
+            return BBHEval(
+                num_examples=num_examples,
+                n_repeats=1 if debug_mode else n_seeds,
+                subtask=subtask_name,
             )
         case _:
             raise Exception(f"Unrecognized eval type: {eval_name}")
