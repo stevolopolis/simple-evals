@@ -1,4 +1,3 @@
-from litellm import completion
 from .base import BaseModel 
 
 
@@ -9,11 +8,11 @@ class LiteModel(BaseModel):
     
     def run(self, messages):
         messages.insert(0, self.system_prompt)
-        res = completion(
+        res = self.completion(
             model=self.model_id,
             messages=messages,
         )
-        return res['choices'][0]['message']['content']
+        return res
 
 
 class CoTModel(BaseModel):
@@ -28,11 +27,10 @@ class CoTModel(BaseModel):
         messages[-1]['content'] += cot_prompt
 
         # first call to elicit cot
-        res = completion(
+        thoughts = self.completion(
             model=self.model_id,
             messages=messages
         )
-        thoughts = res['choices'][0]['message']['content']
 
         # append cot thoughts
         messages.append({
@@ -47,9 +45,9 @@ class CoTModel(BaseModel):
         })
         
         # second call to get final answer
-        res = completion(
+        res = self.completion(
             model=self.model_id,
             messages=messages
         )
-        return res['choices'][0]['message']['content']
+        return res
     

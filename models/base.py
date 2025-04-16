@@ -1,6 +1,8 @@
 from .types import SamplerBase
 from typing import Any
 
+from litellm import completion
+
 SYSTEM_PROMPT = """
 You are a helpful assistant.
 """
@@ -45,3 +47,21 @@ class BaseModel(SamplerBase):
     
     def __call__(self, messages):
         return self.run(messages)
+    
+    def completion(self, model: str, messages: list[dict], simple: bool = True):
+        """
+        Wraps the litellm completion function to support trace logging.
+
+        Args:
+            messages: list of messages
+            simple: if True, return the first choice's message content
+        """
+        res =  completion(
+            model=model,
+            messages=messages
+        )
+
+        if simple:
+            return res['choices'][0]['message']['content']
+        else:
+            return res
