@@ -18,7 +18,7 @@ from .common import (
     normalize_extracted_answer,
     normalize_response,
 )
-from ..types import Eval, EvalResult, SamplerBase, SingleEvalResult
+from ..types import Eval, EvalResult, SamplerBase, SamplerBaseWithId, SingleEvalResult, SingleResult, SingleProblem
 
 subject2category = {
     "abstract_algebra": "stem",
@@ -88,10 +88,18 @@ class MMLUEval(Eval):
         else:
             url = "https://openaipublic.blob.core.windows.net/simple-evals/mmlu.csv"
         df = pandas.read_csv(url)
+
+        # Create index column
+        df['id'] = df.index
+
         examples = [row.to_dict() for _, row in df.iterrows()]
         if num_examples:
             examples = random.Random(0).sample(examples, num_examples)
         self.examples = examples
+
+    @property
+    def name(self):
+        return "mmlu"
 
     def __call__(self, sampler: SamplerBase) -> EvalResult:
         def fn(row: dict):
@@ -100,7 +108,13 @@ class MMLUEval(Eval):
                     content=format_multichoice_question(row), role="user"
                 )
             ]
-            response_text = normalize_response(sampler(prompt_messages))
+            # If sampler is a SamplerBaseWithId, we need to pass the id to the __call__ method
+            if isinstance(sampler, SamplerBaseWithId):
+                response_text = sampler(prompt_messages, row["id"])
+            else:
+                response_text = sampler(prompt_messages)
+
+            response_text = normalize_response(response_text)
             extracted_answer = None
             for answer_regex in MULTILINGUAL_ANSWER_REGEXES:
                 regex = MULTILINGUAL_ANSWER_PATTERN_TEMPLATE.format(answer_regex)
@@ -118,9 +132,28 @@ class MMLUEval(Eval):
             )
             convo = prompt_messages + [dict(content=response_text, role="assistant")]
             category = subject2category.get(row["Subject"], "other")
-            return SingleEvalResult(
-                html=html, score=score, metrics={category: score}, convo=convo
-            )
+            
+            single_eval_result = SingleEvalResult(html=html, score=score, convo=convo, metrics={category: score})
+
+            # If sampler is a SamplerBaseWithId, we need to return a SingleResult
+            if isinstance(sampler, SamplerBaseWithId):
+                single_result = SingleResult(
+                    task=self.name,
+                    id=row["id"],
+                    problem=SingleProblem(instruction=format_multichoice_question(row), input=row["Question"], target=row["Answer"]),
+                    output=response_text,
+                    answer=extracted_answer,
+                    score=score
+                )
+                return single_eval_result, single_result
+            
+            return single_eval_result
+        
+        # If sampler is a SamplerBaseWithId, we need to return a list of SingleEvalResult and SingleResult
+        if isinstance(sampler, SamplerBaseWithId):
+            results_tmp = common.map_with_progress(fn, self.examples)
+            results, single_results = zip(*results_tmp)
+            return common.aggregate_results(results), single_results
 
         results = common.map_with_progress(fn, self.examples)
         return common.aggregate_results(results)

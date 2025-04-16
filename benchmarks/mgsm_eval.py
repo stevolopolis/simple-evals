@@ -10,7 +10,7 @@ from typing import Optional
 
 from . import common
 from .mmlu_eval import HTML_JINJA
-from ..types import Eval, EvalResult, SamplerBase, SingleEvalResult
+from ..types import Eval, EvalResult, SamplerBase, SamplerBaseWithId, SingleEvalResult, SingleResult, SingleProblem
 
 ALL_LANGUAGES = ["bn", "de", "en", "es", "fr", "ja", "ru", "sw", "te", "th", "zh"]
 LATIN_LANGUAGES = ["de", "en", "es", "fr", "sw"]
@@ -108,13 +108,13 @@ def get_lang_examples(lang: str) -> list[dict[str, str]]:
     fpath = LANG_TO_FPATH[lang]
     examples = []
     with common.url_to_fileobj(fpath, binary=True) as f:
-        for raw_line in f:
+        for id, raw_line in enumerate(f):
             line = raw_line.decode("utf-8").strip()
             inputs, targets = line.split("\t")
             if "." in targets:
                 raise ValueError(f"targets {targets} contains a decimal point.")
             # targets = int(targets.replace(",", ""))
-            examples.append({"inputs": inputs, "targets": targets, "lang": lang})
+            examples.append({"inputs": inputs, "targets": targets, "lang": lang, "id": id})
     return examples
 
 
@@ -151,6 +151,10 @@ class MGSMEval(Eval):
             examples.extend(lang_examples[: self._num_examples_per_lang])
         self.examples = examples
 
+    @property
+    def name(self):
+        return "mgsm"
+
     def __call__(self, sampler: SamplerBase) -> EvalResult:
         def fn(example: dict[str, str]):
             language = example["lang"]
@@ -163,7 +167,11 @@ class MGSMEval(Eval):
                 )
             ]
             try:
-                response_text = sampler(prompt_messages)
+                # If sampler is a SamplerBaseWithId, we need to pass the id to the __call__ method
+                if isinstance(sampler, SamplerBaseWithId):
+                    response_text = sampler(prompt_messages, example["id"])
+                else:
+                    response_text = sampler(prompt_messages)
             except Exception as e:
                 response_text = ""
 
@@ -179,12 +187,33 @@ class MGSMEval(Eval):
                 extracted_answer=extracted_answer or None,
             )
             convo = prompt_messages + [dict(content=response_text, role="assistant")]
-            return SingleEvalResult(
+
+            single_eval_result = SingleEvalResult(
                 html=html,
                 score=score,
                 convo=convo,
                 metrics={language: score, latin_language: score},
             )
 
+            # If sampler is a SamplerBaseWithId, we need to return a SingleResult
+            if isinstance(sampler, SamplerBaseWithId):
+                single_result = SingleResult(
+                    task=self.name,
+                    id=example["id"],
+                    problem=SingleProblem(instruction=instruction, input=example["inputs"], target=correct_answer),
+                    output=response_text,
+                    answer=extracted_answer,
+                    score=score
+                )
+                return single_eval_result, single_result
+
+            return single_eval_result
+
+        # If sampler is a SamplerBaseWithId, we need to return a list of SingleEvalResult and SingleResult
+        if isinstance(sampler, SamplerBaseWithId):
+            results_tmp = common.map_with_progress(fn, self.examples)
+            results, single_results = zip(*results_tmp)
+            return common.aggregate_results(results), single_results
+        
         results = common.map_with_progress(fn, self.examples)
         return common.aggregate_results(results, default_stats=("mean", "std"))

@@ -20,7 +20,7 @@ from human_eval.execution import check_correctness  # , unsafe_execute
 
 from . import common
 from .common import HTML_JINJA
-from ..types import Eval, EvalResult, SamplerBase, SingleEvalResult
+from ..types import Eval, EvalResult, SamplerBase, SamplerBaseWithId, SingleEvalResult, SingleResult, SingleProblem
 
 
 def evaluate_functional_correctness(
@@ -69,6 +69,10 @@ class HumanEval(Eval):
         self._ks_passes = ks_passes
         self._timeout = timeout
 
+    @property
+    def name(self):
+        return "humaneval"
+
     def __call__(self, sampler: SamplerBase) -> EvalResult:
         instruction = "Read the following function signature and docstring, and fully implement the function described. Your response should only contain the code for this function.\n"
 
@@ -85,9 +89,17 @@ class HumanEval(Eval):
             prompt_messages = [
                 sampler._pack_message(role="user", content=instruction + sample["prompt"])
             ]
-            completions = [
-                find_code(sampler(prompt_messages)) for _ in range(self._num_samples_per_task)
-            ]
+
+            # If sampler is a SamplerBaseWithId, we need to pass the id to the __call__ method
+            if isinstance(sampler, SamplerBaseWithId):
+                completions = [
+                    find_code(sampler(prompt_messages, sample["task_id"])) for _ in range(self._num_samples_per_task)
+                ]
+            else:
+                completions = [
+                    find_code(sampler(prompt_messages)) for _ in range(self._num_samples_per_task)
+                ]
+
             results = evaluate_functional_correctness(sample, completions)
             total = len(results)
             correct = sum(results)
@@ -102,7 +114,8 @@ class HumanEval(Eval):
             convo = prompt_messages + [
                 dict(content=completion, role="assistant") for completion in completions
             ]
-            return SingleEvalResult(
+
+            single_eval_result = SingleEvalResult(
                 html=html,
                 score=score,
                 convo=convo,
@@ -113,6 +126,26 @@ class HumanEval(Eval):
                     if total >= k
                 },
             )
+
+            # If sampler is a SamplerBaseWithId, we need to return a SingleResult
+            if isinstance(sampler, SamplerBaseWithId):
+                single_result = SingleResult(
+                    task=self.name,
+                    id=sample["task_id"],
+                    problem=SingleProblem(instruction=instruction, input=sample["prompt"], target=sample["test"]),
+                    output=completions,
+                    answer=results,
+                    score=score
+                )
+                return single_eval_result, single_result
+
+            return single_eval_result
+
+        # If sampler is a SamplerBaseWithId, we need to return a list of SingleEvalResult and SingleResult
+        if isinstance(sampler, SamplerBaseWithId):
+            results_tmp = common.map_with_progress(fn, self.examples, num_threads=3)
+            results, single_results = zip(*results_tmp)
+            return common.aggregate_results(results), single_results
 
         results = common.map_with_progress(fn, self.examples, num_threads=3)
         return common.aggregate_results(results)

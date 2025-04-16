@@ -16,7 +16,7 @@ from scipy.optimize import linear_sum_assignment
 
 from . import common
 from .common import ANSWER_PATTERN, HTML_JINJA
-from ..types import Eval, EvalResult, SamplerBase, SingleEvalResult
+from ..types import Eval, EvalResult, SamplerBase, SamplerBaseWithId, SingleEvalResult, SingleResult, SingleProblem
 
 """
 From here through _normalize_answer was originally copied from:
@@ -248,10 +248,18 @@ class DropEval(Eval):
             self.train_samples = list(map(json.loads, f.readlines()))
         with gzip.GzipFile(fileobj=common.url_to_fileobj(self.test_jsonl, binary=True), mode="rb") as f:
             self.test_samples = list(map(json.loads, f.readlines()))
-            if self._num_examples:
+
+        # Create index column
+        self.test_samples = [{"id": i} | row for i, row in enumerate(self.test_samples)]
+
+        if self._num_examples:
                 self.test_samples = random.Random(self.seed).sample(
                     self.test_samples, self._num_examples
                 )
+
+    @property
+    def name(self):
+        return "drop"
 
     def __call__(self, sampler: SamplerBase) -> EvalResult:
         rng = random.Random(self.seed)
@@ -280,7 +288,13 @@ class DropEval(Eval):
 Think step by step, then write a line of the form "Answer: $ANSWER" at the end of your response.
                     """
                     prompt_messages = [sampler._pack_message(content=prompt, role="user")]
-                    response_text = sampler(prompt_messages)
+
+                    # If sampler is a SamplerBaseWithId, we need to pass the id to the __call__ method
+                    if isinstance(sampler, SamplerBaseWithId):
+                        response_text = sampler(prompt_messages, example["id"])
+                    else:
+                        response_text = sampler(prompt_messages)
+
                     match = re.search(ANSWER_PATTERN, response_text)
                     extracted_answer = match.group(1) if match else response_text
                     em_score, f1_score = drop_metric(extracted_answer, correct_answers)
@@ -300,12 +314,32 @@ Think step by step, then write a line of the form "Answer: $ANSWER" at the end o
                         extracted_answer=extracted_answers,
                     )
                     convo = prompt_messages + [dict(content=extracted_answer, role="assistant")]
-                    return SingleEvalResult(
+
+                    single_eval_result = SingleEvalResult(
                         html=html,
                         score=score,
                         convo=convo,
                         metrics={"em_score": em_score, "f1_score": f1_score},
                     )
+                    # If sampler is a SamplerBaseWithId, we need to return a SingleResult
+                    if isinstance(sampler, SamplerBaseWithId):
+                        single_result = SingleResult(
+                            task=self.name,
+                            id=example["id"],
+                            problem=SingleProblem(instruction=prompt, input=example["context"], target=correct_answers),
+                            output=extracted_answer,
+                            answer=extracted_answer,
+                            score=score
+                        )
+                        return single_eval_result, single_result
+                    
+                    return single_eval_result
+
+        # If sampler is a SamplerBaseWithId, we need to return a list of SingleEvalResult and SingleResult
+        if isinstance(sampler, SamplerBaseWithId):
+            results_tmp = common.map_with_progress(fn, self.test_samples)
+            results, single_results = zip(*results_tmp)
+            return common.aggregate_results(results), single_results
 
         results = common.map_with_progress(fn, self.test_samples)
         return common.aggregate_results(results)

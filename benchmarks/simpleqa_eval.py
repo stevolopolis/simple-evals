@@ -8,7 +8,7 @@ import random
 import re
 import pandas
 from . import common
-from ..types import Eval, EvalResult, SamplerBase, SingleEvalResult
+from ..types import Eval, EvalResult, SamplerBase, SamplerBaseWithId, SingleEvalResult, SingleResult, SingleProblem 
 
 GRADER_TEMPLATE = """
 Your job is to look at a question, a gold target, and a predicted answer, and then assign a grade of either ["CORRECT", "INCORRECT", "NOT_ATTEMPTED"].
@@ -101,6 +101,10 @@ class SimpleQAEval(Eval):
         df = pandas.read_csv(
             "https://openaipublic.blob.core.windows.net/simple-evals/simple_qa_test_set.csv"
         )
+        
+        # Create index column
+        df['id'] = df.index
+
         examples = [row.to_dict() for _, row in df.iterrows()]
         if num_examples:
             assert n_repeats == 1, "n_repeats only supported when max_examples = None"
@@ -124,12 +128,22 @@ class SimpleQAEval(Eval):
         match = re.search(r"(A|B|C)", grading_response)
         return match.group(0) if match else "C"  # Default to "NOT_ATTEMPTED" if no match
 
+    @property
+    def name(self):
+        return "simpleqa"
+
     def __call__(self, sampler: SamplerBase) -> EvalResult:
             def fn(row: dict):
                 prompt_messages = [
                     sampler._pack_message(content=row.get("problem", ""), role="user")
                 ]
-                response_text = sampler(prompt_messages)
+
+                # If sampler is a SamplerBaseWithId, we need to pass the id to the __call__ method
+                if isinstance(sampler, SamplerBaseWithId):
+                    response_text = sampler(prompt_messages, row["id"])
+                else:
+                    response_text = sampler(prompt_messages)
+
                 grade_letter = self.grade_sample(row.get("problem", ""), row.get("answer", ""), response_text)
                 
                 # Metrics based on grading response
@@ -148,14 +162,34 @@ class SimpleQAEval(Eval):
                     extracted_answer=response_text,
                 )
                 convo = prompt_messages + [dict(content=response_text, role="assistant")]
-                return SingleEvalResult(html=html, score=score, convo=convo, metrics={
+
+                single_eval_result = SingleEvalResult(html=html, score=score, convo=convo, metrics={
                     "is_correct": is_correct,
                     "is_incorrect": is_incorrect,
                     "is_not_attempted": is_not_attempted
                 })
 
-            # Run evaluation and collect results
-            results = common.map_with_progress(fn, self.examples)
+                # If sampler is a SamplerBaseWithId, we need to return a SingleResult
+                if isinstance(sampler, SamplerBaseWithId):
+                    single_result = SingleResult(
+                        task=self.name,
+                        id=row["id"],
+                        problem=SingleProblem(instruction=row.get("problem", ""), input=row.get("problem", ""), target=row.get("answer", "")),
+                        output=response_text,
+                        answer=grade_letter,
+                        score=score
+                    )
+                    return single_eval_result, single_result
+                    
+                return single_eval_result
+
+            # If sampler is a SamplerBaseWithId, we need to return a list of SingleEvalResult and SingleResult
+            if isinstance(sampler, SamplerBaseWithId):
+                results_tmp = common.map_with_progress(fn, self.examples)
+                results, single_results = zip(*results_tmp)
+            else:
+                # Run evaluation and collect results
+                results = common.map_with_progress(fn, self.examples)
 
             # Aggregate metrics
             aggregate_metrics = {
@@ -187,6 +221,9 @@ class SimpleQAEval(Eval):
             
             print(f"Accuracy Given Attempted: {output_d['accuracy_given_attempted']:.3f}")
             print(f"F1 Score: {output_d['f1']:.3f}")
+
+            if isinstance(sampler, SamplerBaseWithId):
+                return common.aggregate_results(results), single_results
             
             return common.aggregate_results(results)
     
