@@ -38,7 +38,7 @@ def get_evals(eval_name, debug_mode):
     # Set num_examples = None to reproduce full evals
     match eval_name:
         case "mmlu":
-            return MMLUEval(num_examples=1 if debug_mode else num_examples)
+            return MMLUEval(num_examples=num_examples)
         case "math":
             return MathEval(
                 equality_checker=equality_checker,
@@ -58,7 +58,7 @@ def get_evals(eval_name, debug_mode):
                 num_examples=num_examples
             )
         case "mgsm":
-            return MGSMEval(num_examples_per_lang=10 if debug_mode else 250)
+            return MGSMEval(num_examples_per_lang=3 if debug_mode else 250)
         case "drop":
             return DropEval(
                 num_examples=num_examples if num_examples else 10,
@@ -69,7 +69,7 @@ def get_evals(eval_name, debug_mode):
         case "simpleqa":
             return SimpleQAEval(
                 grader_model=grading_sampler,
-                num_examples=num_examples if num_examples else 10,
+                num_examples=num_examples
             )
         case "browsecomp":
             return BrowseCompEval(
@@ -125,9 +125,10 @@ def run_benchmark(
     # Get filenames
     now = datetime.datetime.now()
     timestamp_str = now.strftime("%Y-%m-%d-%H:%M:%S")
-    report_filename = f"{output_agg_dir}/{eval_name}_{timestamp_str}.html"
-    result_filename = f"{output_dir}/{eval_name}_{timestamp_str}.jsonl"
-    trace_filename = f"{output_dir}/{eval_name}_trace_{timestamp_str}.json"
+    debug_suffix = "_debug" if debug_mode else ""
+    report_filename = f"{output_agg_dir}/{eval_name}_{timestamp_str}{debug_suffix}.html"
+    result_filename = f"{output_dir}/{eval_name}_{timestamp_str}{debug_suffix}.jsonl"
+    trace_filename = f"{output_dir}/{eval_name}_trace_{timestamp_str}{debug_suffix}.json"
 
     # Write report html (contains score, metrics, and examples)
     print(f"Writing report to {report_filename}")
