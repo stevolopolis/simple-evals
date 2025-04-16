@@ -19,6 +19,10 @@ from .sampler.o_chat_completion_sampler import OChatCompletionSampler
 from .sampler.claude_sampler import ClaudeCompletionSampler, CLAUDE_SYSTEM_MESSAGE_LMSYS
 
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 def main():
     parser = argparse.ArgumentParser(
         description="Run sampling and evaluations using different samplers and evaluations."
@@ -170,7 +174,8 @@ def main():
 
     evals = {
         eval_name: get_evals(eval_name, args.debug)
-        for eval_name in ["simpleqa", "mmlu", "math", "gpqa", "mgsm", "drop", "humaneval", "browsecomp"]
+        # for eval_name in ["simpleqa", "mmlu", "math", "gpqa", "mgsm", "drop", "humaneval", "browsecomp"]
+        for eval_name in ["math"]
     }
     print(evals)
     debug_suffix = "_DEBUG" if args.debug else ""
