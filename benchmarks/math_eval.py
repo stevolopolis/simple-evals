@@ -47,6 +47,10 @@ class MathEval(Eval):
         self.examples = examples * n_repeats
         self.equality_checker = equality_checker
 
+    @property
+    def name(self):
+        return "math"
+
     def __call__(self, sampler: Union[SamplerBase, SamplerBaseWithId]) -> Union[EvalResult, Tuple[EvalResult, List[SingleEvalResult]]]:
         def fn(row: dict):
             prompt_messages = [
@@ -75,7 +79,7 @@ class MathEval(Eval):
             # If sampler is a SamplerBaseWithId, we need to return a SingleResult
             if isinstance(sampler, SamplerBaseWithId):
                 single_result = SingleResult(
-                    task="math",
+                    task=self.name,
                     id=row["id"],
                     problem=SingleProblem(instruction=QUERY_TEMPLATE, input=row["Question"], target=row["Answer"]),
                     output=response_text,
