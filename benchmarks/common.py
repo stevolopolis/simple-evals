@@ -148,6 +148,47 @@ HTML_JINJA = """
 <p>Score: {{ score }}</p>
 """
 
+class AnswerParser:
+    def __init__(self):
+        pass
+
+    @property
+    def answer_pattern(self):
+        raise NotImplementedError("The answer_pattern property must be implemented by the subclass.")
+
+    def parse(self, answer):
+        raise NotImplementedError("The parse method must be implemented by the subclass.")
+
+
+class DefaultParser(AnswerParser):
+    @property
+    def answer_pattern(self):
+        return "Give your answer in the format of 'ANSWER: <your artithmetic expression>'. Do not include any other text after the answer."
+
+    def parse(self, answer):
+        answer_split = answer.split('ANSWER: ')
+        if len(answer_split) > 1:
+            return answer_split[1].strip()
+        else:
+            return answer
+
+class EmptyParser(AnswerParser):
+    @property
+    def answer_pattern(self):
+        return ""
+
+    def parse(self, answer):
+        return answer
+    
+
+class MATHParser(AnswerParser):
+    @property
+    def answer_pattern(self):
+        return "The last line of your response should be of the form 'Answer: \\boxed{$ANSWER}' (without quotes) where $ANSWER is the answer to the problem. If the answer is a fraction, do not convert it to a decimal."
+
+    def parse(self, answer):
+        return answer.split("Answer: \\boxed{")[1].split("}")[0]
+
 
 def format_multichoice_question(row):
     return QUERY_TEMPLATE_MULTICHOICE.format(**row)
