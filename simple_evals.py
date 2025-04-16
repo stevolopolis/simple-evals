@@ -2,14 +2,14 @@ import json
 import argparse
 import pandas as pd
 from . import common
-from .browsecomp_eval import BrowseCompEval
-from .drop_eval import DropEval
-from .gpqa_eval import GPQAEval
-from .humaneval_eval import HumanEval
-from .math_eval import MathEval
-from .mgsm_eval import MGSMEval
-from .mmlu_eval import MMLUEval
-from .simpleqa_eval import SimpleQAEval
+from .benchmarks.browsecomp_eval import BrowseCompEval
+from .benchmarks.drop_eval import DropEval
+from .benchmarks.gpqa_eval import GPQAEval
+from .benchmarks.humaneval_eval import HumanEval
+from .benchmarks.math_eval import MathEval
+from .benchmarks.mgsm_eval import MGSMEval
+from .benchmarks.mmlu_eval import MMLUEval
+from .benchmarks.simpleqa_eval import SimpleQAEval
 from .sampler.chat_completion_sampler import (
     OPENAI_SYSTEM_MESSAGE_API,
     OPENAI_SYSTEM_MESSAGE_CHATGPT,
