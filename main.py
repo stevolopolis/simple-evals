@@ -129,11 +129,17 @@ def run_benchmark(
     report_filename = f"{output_agg_dir}/{eval_name}_{timestamp_str}{debug_suffix}.html"
     result_filename = f"{output_dir}/{eval_name}_{timestamp_str}{debug_suffix}.jsonl"
     trace_filename = f"{output_dir}/{eval_name}_trace_{timestamp_str}{debug_suffix}.json"
+    agg_results_filename = f"{output_dir}/{eval_name}_agg_results_{timestamp_str}{debug_suffix}.jsonl"
 
     # Write report html (contains score, metrics, and examples)
     print(f"Writing report to {report_filename}")
     with open(report_filename, "w") as fh:
         fh.write(common.make_report(result))
+
+    # Write aggregated results to jsonl
+    metrics = result.metrics | {"score": result.score}
+    with open(agg_results_filename, "w") as fh:
+        fh.write(json.dumps(metrics, indent=2))
 
     print(result.score, result.metrics)
 
