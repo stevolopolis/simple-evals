@@ -39,6 +39,28 @@ class SingleEvalResult:
     convo: MessageList | None = None  # sampled conversation
 
 
+@dataclass
+class SingleProblem:
+    """
+    A single problem. For logging purposes only.
+    """
+    instruction: str | None
+    input: str | None
+    target: str | None
+    
+
+@dataclass 
+class SingleResult:
+    """
+    Result of evaluating a single sample. For logging purposes only.
+    """
+    task: str
+    problem: SingleProblem
+    output: Any
+    answer: Any
+    score: float | None
+
+
 class Eval:
     """
     Base class for defining an evaluation.

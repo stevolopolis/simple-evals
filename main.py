@@ -29,6 +29,9 @@ app = Typer()
 
 grading_sampler = ChatCompletionSampler(model="gpt-4o")
 equality_checker = ChatCompletionSampler(model="gpt-4-turbo-preview")
+
+n_seeds = 1
+
 def get_evals(eval_name, debug_mode):
     num_examples = 5 if debug_mode else None
     # Set num_examples = None to reproduce full evals
@@ -39,7 +42,14 @@ def get_evals(eval_name, debug_mode):
             return MathEval(
                 equality_checker=equality_checker,
                 num_examples=num_examples,
-                n_repeats=1 if debug_mode else 10,
+                n_repeats=1 if debug_mode else n_seeds,
+            )
+        case "math500": 
+            return MathEval(
+                equality_checker=equality_checker,
+                num_examples=num_examples,
+                n_repeats=1 if debug_mode else n_seeds,
+                split="math_500_test"
             )
         case "gpqa":
             return GPQAEval(
@@ -70,7 +80,7 @@ def get_evals(eval_name, debug_mode):
 
 @app.command()
 def run_benchmark(
-    eval_name: str = 'math',
+    eval_name: str = 'math500',
     model_id: str = 'openai/gpt-4o-mini',
     debug_mode: bool = True
 ):
@@ -95,30 +105,36 @@ def run_benchmark(
     eval_obj = get_evals(eval_name, debug_mode)
 
     # Run evaluator
-    result = eval_obj(sampler)
+    result, single_results = eval_obj(sampler, trace=True)
 
     # Create results directory
     output_dir = f'benchmark_results/{model_name}/{method}'
+    output_agg_dir = f'benchmark_results/aggregated/{model_name}/{method}'
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+    if not os.path.exists(output_agg_dir):
+        os.makedirs(output_agg_dir)
 
     # Get filenames
     now = datetime.datetime.now()
     timestamp_str = now.strftime("%Y-%m-%d-%H:%M:%S")
-    report_filename = f"{output_dir}/{eval_name}_{timestamp_str}.html"
-    result_filename = f"{output_dir}/{eval_name}_{timestamp_str}.json"
+    report_filename = f"{output_agg_dir}/{eval_name}_{timestamp_str}.html"
+    result_filename = f"{output_dir}/{eval_name}_{timestamp_str}.jsonl"
 
+    # Write report html (contains score, metrics, and examples)
     print(f"Writing report to {report_filename}")
     with open(report_filename, "w") as fh:
         fh.write(common.make_report(result))
 
-    metrics = result.metrics | {"score": result.score}
-    print(metrics)
+    print(result.score, result.metrics)
 
-    with open(result_filename, "w") as f:
-        f.write(json.dumps(metrics, indent=2))
-    print(f"Writing results to {result_filename}")
-    
+    # Write single results to jsonl
+    with open(result_filename, "w") as fh:
+        for single_result in single_results:
+            # convert single_result to dict
+            single_result_dict = single_result.__dict__
+            single_result_dict["problem"] = single_result.problem.__dict__
+            fh.write(json.dumps(single_result_dict) + "\n")
 
 @app.command()
 def run_all_methods_same_model(
