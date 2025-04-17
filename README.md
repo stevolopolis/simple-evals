@@ -6,15 +6,18 @@ We are open sourcing it so we can be transparent about the accuracy numbers we'r
 
 This is a table indicating the sources of implementations for each newly added benchmark.
 
-| Benchmark | Benchmark Source | Data Source | Prompt Source | Eval Source | Impl Source | Results affected |
-| --- | --- | --- | --- | --- | --- | --- |
-| gameof24 | ToT | -- | DOTS/Meta-prompting/BoT | -- | Custom | NO |
-| bbeh | BBEH | -- | -- | -- | Custom | NO |
-| bbh | BBH | -- | BBEH | BBEH | Custom | NO |
-| p3 | P3 | -- | Meta-prompting | Meta-prompting | Custom | NO |
-| sonnet-writing | Meta-prompting | -- | -- | -- | Custom | NO |
+| Benchmark | Benchmark Source | Data Source | Prompt Source | Eval Source | Impl Source | Results validated | Question Prompt Type |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| gameof24 | ToT | -- | DOTS/Meta-prompting/BoT | -- | Custom | NO | Zero-shot |
+| bbeh | BBEH | -- | -- | -- | Custom | NO | Zero-shot CoT |
+| bbh | BBH | -- | BBEH | BBEH | Custom | NO | Zero-shot CoT |
+| p3 | P3 | -- | Meta-prompting | Meta-prompting | Custom | NO | Zero-shot |
+| sonnet-writing | Meta-prompting | -- | -- | -- | Custom | NO | Zero-shot |
+| theoremqa | TheoremQA | -- | Custom* | -- | Custom | NO | Zero-shot |
 
 -- Indicates the original source
+
+*We changed the original prompt from few-shot demonstration to a simple text prompt.
 
 BC = Backwards-compatible minor modifications
 
