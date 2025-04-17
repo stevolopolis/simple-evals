@@ -163,7 +163,7 @@ class AnswerParser:
 class DefaultParser(AnswerParser):
     @property
     def answer_pattern(self):
-        return "Give your answer in the format of 'ANSWER: <your artithmetic expression>'. Do not include any other text after the answer."
+        return "Give your answer in the format of 'ANSWER: <your answer>'. Do not include any other text after the answer."
 
     def parse(self, answer):
         answer_split = answer.split('ANSWER: ')

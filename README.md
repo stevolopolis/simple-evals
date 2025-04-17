@@ -12,7 +12,7 @@ This is a table indicating the sources of implementations for each newly added b
 | bbeh | BBEH | -- | -- | -- | Custom | NO |
 | bbh | BBH | -- | BBEH | BBEH | Custom | NO |
 | p3 | P3 | -- | Meta-prompting | Meta-prompting | Custom | NO |
-| sonnet-writing| -- | -- | -- | -- | -- | -- |
+| sonnet-writing | Meta-prompting | -- | -- | -- | Custom | NO |
 
 -- Indicates the original source
 
