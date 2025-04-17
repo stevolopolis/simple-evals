@@ -18,6 +18,7 @@ from .benchmarks.simpleqa_eval import SimpleQAEval
 from .benchmarks.gameof24_eval import Gameof24Eval
 from .benchmarks.bbeh_eval import BBEHEval
 from .benchmarks.bbh_eval import BBHEval
+from .benchmarks.p3_eval import P3Eval
 from .sampler.chat_completion_sampler import (
     ChatCompletionSampler,
 )
@@ -98,6 +99,11 @@ def get_evals(eval_name, debug_mode):
                 num_examples=num_examples,
                 n_repeats=1 if debug_mode else n_seeds,
                 subtask=subtask_name,
+            )
+        case "p3":
+            return P3Eval(
+                num_examples=num_examples,
+                n_repeats=1 if debug_mode else n_seeds,
             )
         case _:
             raise Exception(f"Unrecognized eval type: {eval_name}")
