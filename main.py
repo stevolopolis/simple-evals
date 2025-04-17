@@ -224,6 +224,17 @@ def run_all_models_same_method(
         run_benchmark(task, model_id, debug)
 
 
+@app.command()
+def run_test_suite(
+    model_id: str = 'openai/gpt-4o-mini',
+    debug_mode: bool = True,
+    suite: str = "dots"
+):
+    dots_suite = ["math500", "gameof24", "theoremqa"]
+
+    for task in dots_suite:
+        run_benchmark(task, model_id, debug_mode)    
+
 
 
 if __name__ == "__main__":
