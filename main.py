@@ -165,7 +165,7 @@ def run_benchmark(
     report_filename = f"{output_agg_dir}/{eval_name}_{timestamp_str}{debug_suffix}.html"
     result_filename = f"{output_dir}/{eval_name}_{timestamp_str}{debug_suffix}.jsonl"
     trace_filename = f"{output_dir}/{eval_name}_trace_{timestamp_str}{debug_suffix}.json"
-    agg_results_filename = f"{output_dir}/{eval_name}_agg_results_{timestamp_str}{debug_suffix}.jsonl"
+    agg_results_filename = f"{output_dir}/{eval_name}_agg_results_{timestamp_str}{debug_suffix}.json"
 
     # Write report html (contains score, metrics, and examples)
     print(f"Writing report to {report_filename}")
@@ -197,8 +197,6 @@ def run_all_methods_same_model(
     debug: bool = False
 ):
     for method in get_all_methods():
-        if method == "cot":
-            continue    
         model_id = model + "/" + method
         run_benchmark(task, model_id, debug)
 
@@ -228,12 +226,41 @@ def run_all_models_same_method(
 def run_test_suite(
     model_id: str = 'openai/gpt-4o-mini',
     debug_mode: bool = True,
-    suite: str = "dots"
+    suite: str = "debug",
+    method: str = None
 ):
-    dots_suite = ["math500", "gameof24", "theoremqa"]
+    suites = { 
+        "dots": [
+            "math500",
+            "gameof24",
+            "theoremqa"
+        ],
+        "small": [
+            # "math500",
+            "gameof24",
+            "bbh-multistep_arithmetic_two",
+            "bbh-word_sorting",
+            "bbeh-multistep_arithmetic",
+            "bbeh-word_sorting",
+            "p3"
+        ],
+        "debug": [
+            "p3"
+        ],
+    }
 
-    for task in dots_suite:
-        run_benchmark(task, model_id, debug_mode)    
+    if method == "all":
+        for method in get_all_methods():
+            model_id = model_id + "/" + method
+            for task in suites[suite]:
+                run_benchmark(task, model_id, debug_mode)    
+    elif method in get_all_methods():
+        model_id = model_id + "/" + method
+        for task in suites[suite]:
+            run_benchmark(task, model_id, debug_mode)
+    else:
+        for task in suites[suite]:
+            run_benchmark(task, model_id, debug_mode)
 
 
 
