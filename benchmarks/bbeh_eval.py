@@ -38,10 +38,10 @@ class BBEHEval(Eval):
     
         assert subtask in self.subtasks, f"Provided subtask is not valid. Available subtasks are:\n{self.subtasks}"
         
-        task_name = f"bbeh_{subtask}"
+        self.task_name = f"bbeh-{subtask}"
         
         # Download task json from url
-        task_url = f"{BBEH_URL}/{task_name}/task.json"
+        task_url = f"{BBEH_URL}/bbeh_{subtask}.json"
         raw_data = requests.get(task_url).json()
 
         # Parse "examples" field for list of data
@@ -50,7 +50,7 @@ class BBEHEval(Eval):
         # Add id column
         examples = [example | {"id": i} for i, example in enumerate(examples)]
 
-        print(f"BBEH: {task_name} ({len(examples)} examples)")
+        print(f"BBEH: {self.task_name} ({len(examples)} examples)")
 
         rng = random.Random(0)
         if num_examples:
@@ -119,7 +119,7 @@ class BBEHEval(Eval):
             # If sampler is a SamplerBaseWithId, we need to return a SingleResult
             if isinstance(sampler, SamplerBaseWithId):
                 single_result = SingleResult(
-                    task=self.name,
+                    task=self.task_name,
                     id=row["id"],
                     problem=SingleProblem(instruction=row["input"] + BBEH_SUFFIX, input=row["input"], target=row["target"]),
                     output=response_text,
