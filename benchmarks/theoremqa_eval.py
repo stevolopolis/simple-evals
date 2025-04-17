@@ -9,6 +9,7 @@ https://arxiv.org/abs/2401.12954
 
 import base64
 import random
+import io
 from typing import Tuple, List, Union
 
 from datasets import load_dataset
@@ -64,15 +65,22 @@ class TheoremQAEval(Eval):
     
     def __call__(self, sampler: Union[SamplerBase, SamplerBaseWithId]) -> Union[EvalResult, Tuple[EvalResult, List[SingleEvalResult]]]:
         def fn(row: dict):
-            prompt_messages = [
-                sampler._pack_message(content=THEOREMQA_DEFAULT_PROMPT.format(problem=row["Question"], answer_format=self.answer_parser.answer_pattern), role="user")
+            # Prepare the question content
+            content = [
+                sampler._handle_text(THEOREMQA_DEFAULT_PROMPT.format(problem=row["Question"], answer_format=self.answer_parser.answer_pattern))
             ]
-
             # If the question includes an image, we need to add it to the prompt
             if row["Picture"] is not None:
-                # Convert the image to a base64 string
-                image_base64 = base64.b64encode(row["Picture"]).decode("utf-8")
-                prompt_messages.append(sampler._pack_message(content=sampler._handle_image(image_base64), role="user"))
+                # Convert the PIL image to a base64 string
+                buffered = io.BytesIO()
+                row["Picture"].save(buffered, format="PNG")
+                image_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+                content.append(sampler._handle_image(image_base64))
+
+            prompt_messages = [
+                sampler._pack_message(content=content, role="user")
+            ]
 
             # If sampler is a SamplerBaseWithId, we need to pass the id to the __call__ method
             if isinstance(sampler, SamplerBaseWithId):
