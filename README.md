@@ -2,6 +2,22 @@
 This repository contains a lightweight library for evaluating language models.
 We are open sourcing it so we can be transparent about the accuracy numbers we're publishing alongside our latest models.
 
+## Reproducibility
+
+This is a table indicating the sources of implementations for each newly added benchmark.
+
+| Benchmark | Benchmark Source | Data Source | Prompt Source | Eval Source | Impl Source | Results affected |
+| --- | --- | --- | --- | --- | --- | --- |
+| gameof24 | ToT | -- | DOTS/Meta-prompting/BoT | -- | Custom | NO |
+| bbeh | BBEH | -- | -- | -- | Custom | NO |
+| bbh | BBH | -- | BBEH | BBEH | Custom | NO |
+| p3 | P3 | -- | Meta-prompting | Meta-prompting | Custom | NO |
+| sonnet-writing| -- | -- | -- | -- | -- | -- |
+
+-- Indicates the original source
+
+BC = Backwards-compatible minor modifications
+
 ## Benchmark Results
 
 | Model                        | Prompt        | MMLU   | GPQA   | MATH   | HumanEval | MGSM[^5] | DROP[^5]<br>(F1, 3-shot) | SimpleQA 
