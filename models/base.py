@@ -68,7 +68,9 @@ class BaseModel(SamplerBaseWithId):
         """
         res = completion(
             model=model,
-            messages=messages
+            messages=messages,
+            cache={"no-cache": True},
+            **kwargs      
         )
 
         # add previous messages to trace, if not already added
