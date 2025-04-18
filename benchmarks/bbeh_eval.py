@@ -41,7 +41,7 @@ class BBEHEval(Eval):
         self.task_name = f"bbeh-{subtask}"
         
         # Download task json from url
-        task_url = f"{BBEH_URL}/bbeh_{subtask}.json"
+        task_url = f"{BBEH_URL}/bbeh_{subtask}/task.json"
         raw_data = requests.get(task_url).json()
 
         # Parse "examples" field for list of data

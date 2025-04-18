@@ -37,7 +37,7 @@ class BBHEval(BBEHEval):
         # Add id column
         examples = [example | {"id": i} for i, example in enumerate(examples)]
 
-        print(f"BBH: {subtask} ({len(examples)} examples)")
+        print(f"BBH: {self.task_name} ({len(examples)} examples)")
 
         rng = random.Random(0)
         if num_examples:
