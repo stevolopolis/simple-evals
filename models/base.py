@@ -1,9 +1,12 @@
-from ..types import SamplerBaseWithId
 from typing import Any
 import json
-import threading
 import copy
 from litellm import completion
+from typing import Union, List
+
+from ..types import SamplerBaseWithId
+from .trace import Trace, Traces
+
 
 SYSTEM_PROMPT = """
 You are a helpful assistant.
@@ -19,7 +22,7 @@ class BaseModel(SamplerBaseWithId):
         }
 
         self.traces = {}
-        self.full_traces = {}   # contains every I/O call of the LLM
+        self.full_traces = Traces()   # contains every I/O call of the LLM
 
         print(f"Initializing model.\nModel ID: {self.model_id}\nModel Type: {self.model_type}")
 
@@ -47,7 +50,15 @@ class BaseModel(SamplerBaseWithId):
         """Copied from openai/simple-evals/sampler/chat_completion_sampler.py"""
         return {"role": str(role), "content": content}
     
-    def completion(self, model: str, messages: list[dict], simple: bool = True, id: int = None):
+    def completion(self,
+        model: str,
+        messages: list[dict],
+        simple: bool = True,
+        id: int = None,
+        parent_node_ids: Union[int, List[int]] = -1,
+        return_node_id: bool = False,
+        **kwargs
+    ):
         """
         Wraps the litellm completion function to support trace logging.
 
@@ -63,16 +74,23 @@ class BaseModel(SamplerBaseWithId):
         # add previous messages to trace, if not already added
         self.traces[id].extend(copy.deepcopy(messages[len(self.traces[id]):]))
         # add I/O to full trace
-        self.full_traces[id].append({
-            "input": copy.deepcopy(messages),
-            "output": res['choices'][0]['message']['content']
-        })
+        curr_node_id = self.full_traces[id].add_messages(
+            input=copy.deepcopy(messages),
+            output=copy.deepcopy(res['choices'][0]['message']['content']),
+            parent_node_ids=parent_node_ids
+        )
 
-        if simple:
-            return res['choices'][0]['message']['content']
+        if not return_node_id:
+            if simple:
+                return res['choices'][0]['message']['content']
+            else:
+                return res['choices']
         else:
-            return res
-        
+            if simple:
+                return res['choices'][0]['message']['content'], curr_node_id
+            else:
+                return res['choices'], curr_node_id
+
     def save_trace(self, path: str):
         # save traces
         with open(path, 'w') as f:
@@ -80,10 +98,10 @@ class BaseModel(SamplerBaseWithId):
         
         # save full traces
         with open(path.replace('.json', '_full.json'), 'w') as f:
-            f.write(json.dumps(self.full_traces, indent=4))
+            f.write(json.dumps(self.full_traces.__dict__(), indent=4))
         
 
-    def run(self, messages, id: int):
+    def run(self, messages, id: int, return_node_id: bool = False, parent_node_ids: Union[int, List[int]] = -1):
         raise NotImplementedError("The run method must be implemented by the subclass.")
     
     def __call__(self, messages, id: int):
@@ -96,7 +114,8 @@ class BaseModel(SamplerBaseWithId):
             id = f"{id}_{len(self.traces[id]) + 1}"
 
         self.traces[id] = messages
-        self.full_traces[id] = []
+
+        self.full_traces[id] = Trace()
         res = self.run(messages, id)
 
         # add final response to trace
