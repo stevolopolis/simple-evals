@@ -2,8 +2,9 @@ from ..models import *
 
 
 model_methods = {
-    "cot": CoTModel,
     "vanilla": LiteModel,
+    "cot": CoTModel,
+    "cot-sc": CoTSCModel,
     "dspy": DspyModel,
     "dspy-cot": DspyCoTModel,
     "dspy-pot": DspyPotModel
