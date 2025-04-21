@@ -5,6 +5,9 @@ model_methods = {
     "vanilla": LiteModel,
     "cot": CoTModel,
     "cot-sc": CoTSCModel,
+    "ltm": LTMModel,
+    "pot": PoTModel,
+    "sr": SelfRefineModel,
     "dspy": DspyModel,
     "dspy-cot": DspyCoTModel,
     "dspy-pot": DspyPotModel
