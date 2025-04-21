@@ -15,12 +15,33 @@ from . import common
 from .common import HTML_JINJA
 from ..types import Eval, EvalResult, SamplerBase, SamplerBaseWithId, SingleEvalResult, SingleResult, SingleProblem
 
-QUERY_TEMPLATE = """
+BOT_PROMPT = """
 Let's play a game called 24. You'll be given four integers, and your objective is to use each number only once, combined with any of the four arithmetic operations (addition, subtraction, multiplication, and division) and parentheses, to achieve a total of 24. For example, if the input is 4, 7, 8, and 8, the output could be 7 * 8 - 4 * 8 = 24. You only need to find one feasible solution!
 Input: {input}
 
 {answer_pattern}
 """.strip()
+
+
+# Default from original ToT code
+ORIGINAL_PROMPT = """
+standard_prompt = '''Use numbers and basic arithmetic operations (+ - * /) to obtain 24.
+Input: 4 4 6 8
+Answer: (4 + 8) * (6 - 4) = 24
+Input: 2 9 10 12
+Answer: 2 * 12 * (10 - 9) = 24
+Input: 4 9 10 13
+Answer: (13 - 9) * (10 - 4) = 24
+Input: 1 4 8 8
+Answer: (8 / 4 + 1) * 8 = 24
+Input: 5 5 5 9
+Answer: 5 + 5 + 5 + 9 = 24
+Input: {input}
+
+{answer_pattern}
+""".strip()
+
+QUERY_TEMPLATE = BOT_PROMPT
 
 
 class Gameof24Eval(Eval):

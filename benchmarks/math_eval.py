@@ -15,13 +15,22 @@ from . import common
 from .common import ANSWER_PATTERN, HTML_JINJA, check_equality
 from ..types import Eval, EvalResult, SamplerBase, SamplerBaseWithId, SingleEvalResult, SingleResult, SingleProblem
 
-QUERY_TEMPLATE = """
+# Default in simple-evals
+QUERY_TEMPLATE_SIMPLE_EVAL = """
 Solve the following math problem step by step. The last line of your response should be of the form Answer: $ANSWER (without quotes) where $ANSWER is the answer to the problem.
 
 {Question}
 
 Remember to put your answer on its own line after "Answer:", and you do not need to use a \\boxed command.
 """.strip()
+
+QUERY_TEMPLATE_DOTS = """
+Solve the following math problem. The last line of your response should be of the form 'Answer: \\boxed{$ANSWER}' (without quotes) where $ANSWER is the answer to the problem. If the answer is a fraction, do not convert it to a decimal.
+
+Question: {Question}
+""".strip()
+
+QUERY_TEMPLATE = QUERY_TEMPLATE_DOTS
 
 
 class MathEval(Eval):
@@ -54,7 +63,7 @@ class MathEval(Eval):
     def __call__(self, sampler: Union[SamplerBase, SamplerBaseWithId]) -> Union[EvalResult, Tuple[EvalResult, List[SingleEvalResult]]]:
         def fn(row: dict):
             prompt_messages = [
-                sampler._pack_message(content=QUERY_TEMPLATE.format(**row), role="user")
+                sampler._pack_message(content=QUERY_TEMPLATE.replace("{Question}", row["Question"]), role="user")
             ]
             # If sampler is a SamplerBaseWithId, we need to pass the id to the __call__ method
             if isinstance(sampler, SamplerBaseWithId):

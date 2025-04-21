@@ -14,14 +14,24 @@ from .common import HTML_JINJA
 from ..types import Eval, EvalResult, MessageList, SamplerBase, SamplerBaseWithId, SingleEvalResult, SingleResult, SingleProblem
 from .utils.bbeh_eval_helpers import evaluate_correctness
 
-
-BBEH_SUFFIX = """
+# Default in simple-evals
+BBEH_SUFFIX_WITH_COT = """
 Think step by step, and when you provide the final answer, please use the prefix "The answer is:"
 without any modification, and provide the answer directly, with no formatting, no bolding, and
 no markup. For instance: "The answer is: 42" or "The answer is: yes". If the question is multiple
 choice with a single correct answer, the final answer must only be the letter corresponding to
 the correct answer. For example, "The answer is: (a)".
 """
+
+BBEH_SUFFIX_WITHOUT_COT = """
+When you provide the final answer, please use the prefix "The answer is:"
+without any modification, and provide the answer directly, with no formatting, no bolding, and
+no markup. For instance: "The answer is: 42" or "The answer is: yes". If the question is multiple
+choice with a single correct answer, the final answer must only be the letter corresponding to
+the correct answer. For example, "The answer is: (a)".
+"""
+
+BBEH_SUFFIX = BBEH_SUFFIX_WITH_COT
 
 BBEH_URL = "https://github.com/google-deepmind/bbeh/raw/refs/heads/main/bbeh/benchmark_tasks"
 
