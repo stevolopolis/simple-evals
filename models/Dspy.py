@@ -54,6 +54,10 @@ class DspyPotModel(BaseModel):
         with dspy.context(lm=lm):
             module = dspy.ProgramOfThought("question -> answer")
             question = messages[-1]['content']
-            answer = module(question=question)
+            try:
+                answer = module(question=question)
+            except RuntimeError as e:
+                print(f"Error: {e}")
+                return f"Error: {e}"
             
         return answer.answer
