@@ -86,12 +86,12 @@ class BaseModel(SamplerBaseWithId):
             if simple:
                 return res['choices'][0]['message']['content']
             else:
-                return res['choices']
+                return [out["message"]["content"] for out in res['choices']]
         else:
             if simple:
                 return res['choices'][0]['message']['content'], curr_node_id
             else:
-                return res['choices'], curr_node_id
+                return [out["message"]["content"] for out in res['choices']], curr_node_id
 
     def save_trace(self, path: str):
         # save traces
