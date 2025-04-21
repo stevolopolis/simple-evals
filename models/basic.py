@@ -351,7 +351,12 @@ If it is incorrect, state the reason of error and go through the solution step b
             return_node_id=True
         )
 
-        fb = fb_and_solution.split("Answer:")[0]
-        refined_solution = fb_and_solution.split("Answer:")[1]
+        fb_and_solution_split = fb_and_solution.split("Answer:")
+        if len(fb_and_solution_split) > 1:
+            fb = fb_and_solution_split[0]
+            refined_solution = fb_and_solution_split[1]
+        else:
+            fb = fb_and_solution
+            refined_solution = fb_and_solution
 
         return fb, refined_solution, prev_node_id
