@@ -16,9 +16,9 @@ BBH_URL = "https://github.com/suzgunmirac/BIG-Bench-Hard/raw/refs/heads/main/bbh
 class BBHEval(BBEHEval):
     def __init__(
         self,
+        subtask: str,
         n_repeats: int = 4,
         num_examples: int | None = None,  # restrict to a subset of the data for debugging
-        subtask: str | None = None,
     ):
         if subtask is None:
             raise ValueError(f"Subtask must be provided. Available subtasks are:\n{self.subtasks}")

@@ -14,7 +14,7 @@ from .common import HTML_JINJA
 from ..types import Eval, EvalResult, MessageList, SamplerBase, SamplerBaseWithId, SingleEvalResult, SingleResult, SingleProblem
 from .utils.bbeh_eval_helpers import evaluate_correctness
 
-# Default in simple-evals
+# Default in BBEH (reproducibility statement in arxiv paper appendix)
 BBEH_SUFFIX_WITH_COT = """
 Think step by step, and when you provide the final answer, please use the prefix "The answer is:"
 without any modification, and provide the answer directly, with no formatting, no bolding, and
@@ -39,9 +39,9 @@ BBEH_URL = "https://github.com/google-deepmind/bbeh/raw/refs/heads/main/bbeh/ben
 class BBEHEval(Eval):
     def __init__(
         self,
+        subtask: str,
         n_repeats: int = 4,
         num_examples: int | None = None,  # restrict to a subset of the data for debugging
-        subtask: str | None = None,
     ):
         if subtask is None:
             raise ValueError(f"Subtask must be provided. Available subtasks are:\n{self.subtasks}")
@@ -148,3 +148,6 @@ class BBEHEval(Eval):
 
         results = common.map_with_progress(fn, self.examples)
         return common.aggregate_results(results)
+    
+    def eval_fn(self, sample, reference, return_extracted_answer=False):
+        return evaluate_correctness(sample, reference, return_extracted_answer=return_extracted_answer)
