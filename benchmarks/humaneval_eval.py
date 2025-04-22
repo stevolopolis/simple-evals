@@ -57,10 +57,20 @@ class HumanEval(Eval):
         num_samples_per_task: int = 5,
         ks_passes: list[int] = [1, 2, 5],
         timeout: int = 120,
+        split_ratio: float | None = None,
     ):
         self.seed = 0
         self.examples = read_problems()
         self.examples = list(self.examples.values())
+
+        if split_ratio:
+            split_index = int(len(self.examples) * split_ratio)
+            # shuffle examples
+            random.shuffle(self.examples)
+            self.training_examples = self.examples[:split_index]
+            self.examples = self.examples[split_index:]
+        else:
+            self.training_examples = self.examples
 
         self._num_examples = num_examples
         if self._num_examples:

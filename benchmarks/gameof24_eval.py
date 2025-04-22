@@ -49,7 +49,9 @@ class Gameof24Eval(Eval):
         self,
         num_examples: int | None = None,
         n_repeats: int = 16,
+        split_ratio: float | None = None  # split the data into training and evaluation sets
     ):
+        super().__init__()
         # Load data
         data_path = f'simple-evals/benchmarks/data/gameof24.jsonl'
         df = pandas.read_json(data_path, lines=True)    # header: {input, target}
@@ -64,6 +66,17 @@ class Gameof24Eval(Eval):
         df['answer_pattern'] = self.answer_pattern.answer_pattern
 
         examples = [row.to_dict() for _, row in df.iterrows()]
+
+        if split_ratio:
+            split_index = int(len(examples) * split_ratio)
+            # shuffle examples
+            random.shuffle(examples)
+            self.training_examples = examples[:split_index]
+            examples = examples[split_index:]
+        else:
+            self.training_examples = examples
+
+
         if num_examples:
             assert n_repeats == 1, "n_repeats only supported for num_examples = None"
             rng = random.Random(0)
@@ -76,8 +89,9 @@ class Gameof24Eval(Eval):
 
     def __call__(self, sampler: Union[SamplerBase, SamplerBaseWithId]) -> Union[EvalResult, Tuple[EvalResult, List[SingleEvalResult]]]:
         def fn(row: dict):
+            input_, target = self.get_x_y_data(row)
             prompt_messages = [
-                sampler._pack_message(content=QUERY_TEMPLATE.format(**row), role="user")
+                sampler._pack_message(content=input_, role="user")
             ]
             # If sampler is a SamplerBaseWithId, we need to pass the id to the __call__ method
             if isinstance(sampler, SamplerBaseWithId):
@@ -91,7 +105,7 @@ class Gameof24Eval(Eval):
                 prompt_messages=prompt_messages,
                 next_message=dict(content=response_text, role="assistant"),
                 score=score,
-                correct_answer=row["target"],
+                correct_answer=target,
                 extracted_answer=extracted_answer,
             )
             convo = prompt_messages + [dict(content=response_text, role="assistant")]
@@ -138,3 +152,12 @@ class Gameof24Eval(Eval):
         except Exception as e:
             # print(e)
             return 0
+        
+    def eval_fn(self, sample, reference):
+        extracted_answer = self.answer_pattern.parse(sample)
+        return self.check_equality(reference, extracted_answer)   
+        
+    def get_x_y_data(self, example):
+        x = QUERY_TEMPLATE.format(**example)
+        y = example["input"]
+        return x, y

@@ -39,8 +39,11 @@ class MathEval(Eval):
         equality_checker: SamplerBase,
         num_examples: int | None = None,
         n_repeats: int = 16,
-        split: Literal["math_test", "math_500_test"] = "math_test",
+        split: Literal["math_test", "math_500_test"] = "math_500_test",
+        split_ratio: float | None = None  # split the data into training and evaluation sets
     ):
+        super().__init__()
+
         df = pandas.read_csv(
             f"https://openaipublic.blob.core.windows.net/simple-evals/{split}.csv"
         )
@@ -49,6 +52,16 @@ class MathEval(Eval):
         df['id'] = df.index
 
         examples = [row.to_dict() for _, row in df.iterrows()]
+
+        if split_ratio:
+            split_index = int(len(examples) * split_ratio)
+            # shuffle examples
+            random.shuffle(examples)
+            self.training_examples = examples[:split_index]
+            examples = examples[split_index:]
+        else:
+            self.training_examples = examples
+
         if num_examples:
             assert n_repeats == 1, "n_repeats only supported for num_examples = None"
             rng = random.Random(0)
@@ -62,8 +75,10 @@ class MathEval(Eval):
 
     def __call__(self, sampler: Union[SamplerBase, SamplerBaseWithId]) -> Union[EvalResult, Tuple[EvalResult, List[SingleEvalResult]]]:
         def fn(row: dict):
+            input_, target_ = self.get_x_y_data(row)
+
             prompt_messages = [
-                sampler._pack_message(content=QUERY_TEMPLATE.replace("{Question}", row["Question"]), role="user")
+                sampler._pack_message(content=input_, role="user")
             ]
             # If sampler is a SamplerBaseWithId, we need to pass the id to the __call__ method
             if isinstance(sampler, SamplerBaseWithId):
@@ -73,12 +88,12 @@ class MathEval(Eval):
 
             match = re.search(ANSWER_PATTERN, response_text)
             extracted_answer = match.group(1) if match else None
-            score = float(check_equality(self.equality_checker, row["Answer"], extracted_answer))
+            score = float(check_equality(self.equality_checker, target_, extracted_answer))
             html = common.jinja_env.from_string(HTML_JINJA).render(
                 prompt_messages=prompt_messages,
                 next_message=dict(content=response_text, role="assistant"),
                 score=score,
-                correct_answer=row["Answer"],
+                correct_answer=target_,
                 extracted_answer=extracted_answer,
             )
             convo = prompt_messages + [dict(content=response_text, role="assistant")]
@@ -107,3 +122,16 @@ class MathEval(Eval):
 
         results = common.map_with_progress(fn, self.examples)
         return common.aggregate_results(results)
+
+    def eval_fn(self, sample, reference, return_extracted_answer=False):
+        match = re.search(ANSWER_PATTERN, sample)
+        extracted_answer = match.group(1) if match else None
+        score = float(check_equality(self.equality_checker, reference, extracted_answer))
+        if return_extracted_answer:
+            return score, extracted_answer
+        return score
+    
+    def get_x_y_data(self, example):
+        x = QUERY_TEMPLATE.replace("{Question}", example["Question"])
+        y = example["Answer"]
+        return x, y

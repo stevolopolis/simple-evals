@@ -30,6 +30,7 @@ class P3Eval(Eval):
         self,
         n_repeats: int = 4,
         num_examples: int | None = None,  # restrict to a subset of the data for debugging
+        split_ratio: float | None = None  # split the data into training and evaluation sets
     ):
         # Download task json from url
         task_url = "https://github.com/microsoft/PythonProgrammingPuzzles/raw/refs/heads/main/puzzles/puzzles.json"
@@ -51,6 +52,15 @@ class P3Eval(Eval):
 
         print(f"P3: {len(examples)} examples")
 
+        if split_ratio:
+            split_index = int(len(examples) * split_ratio)
+            # shuffle examples
+            random.shuffle(examples)
+            self.training_examples = examples[:split_index]
+            examples = examples[split_index:]
+        else:
+            self.training_examples = examples
+
         rng = random.Random(0)
         if num_examples:
             assert n_repeats == 1, "n_repeats only supported for num_examples = None"
@@ -66,8 +76,9 @@ class P3Eval(Eval):
     
     def __call__(self, sampler: Union[SamplerBase, SamplerBaseWithId]) -> Union[EvalResult, Tuple[EvalResult, List[SingleEvalResult]]]:
         def fn(row: dict):
+            input_, target = self.get_x_y_data(row)
             prompt_messages = [
-                sampler._pack_message(content=P3_PROMPT.format(input=row["sat"]), role="user")
+                sampler._pack_message(content=input_, role="user")
             ]
             # If sampler is a SamplerBaseWithId, we need to pass the id to the __call__ method
             if isinstance(sampler, SamplerBaseWithId):
@@ -75,7 +86,7 @@ class P3Eval(Eval):
             else:
                 response_text = sampler(prompt_messages)
 
-            score, extracted_answer = self.eval_for_pyton_programming_puzzles(row["sat"], response_text)
+            score, extracted_answer = self.eval_fn(response_text, target, return_extracted_answer=True)
             html = common.jinja_env.from_string(HTML_JINJA).render(
                 prompt_messages=prompt_messages,
                 next_message=dict(content=response_text, role="assistant"),
@@ -92,7 +103,7 @@ class P3Eval(Eval):
                 single_result = SingleResult(
                     task=self.name,
                     id=row["id"],
-                    problem=SingleProblem(instruction=P3_PROMPT.format(input=row["sat"]), input=row["sat"], target=row["sol_docstring"]),
+                    problem=SingleProblem(instruction=input_, input=row["sat"], target=row["sol_docstring"]),
                     output=response_text,
                     answer=extracted_answer,
                     score=score
@@ -140,3 +151,15 @@ class P3Eval(Eval):
             return True, output
         
         return False, output
+    
+    def eval_fn(self, sample, reference, return_extracted_answer=False):
+        score, extracted_answer = self.eval_for_pyton_programming_puzzles(sample, reference)
+        if return_extracted_answer:
+            return score, extracted_answer
+        return score
+
+    def get_x_y_data(self, example):
+        x = P3_PROMPT.format(input=example["sat"])
+        y = example["sat"]
+
+        return x, y

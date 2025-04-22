@@ -42,7 +42,10 @@ class BBEHEval(Eval):
         subtask: str,
         n_repeats: int = 4,
         num_examples: int | None = None,  # restrict to a subset of the data for debugging
+        split_ratio: float | None = None  # split the data into training and evaluation sets
     ):
+        super().__init__()
+        
         if subtask is None:
             raise ValueError(f"Subtask must be provided. Available subtasks are:\n{self.subtasks}")
     
@@ -60,7 +63,19 @@ class BBEHEval(Eval):
         # Add id column
         examples = [example | {"id": i} for i, example in enumerate(examples)]
 
+        # Append prompt suffix to each example
+        examples = [example | {"input": example["input"] + BBEH_SUFFIX} for example in examples]
+
         print(f"BBEH: {self.task_name} ({len(examples)} examples)")
+
+        if split_ratio:
+            split_index = int(len(examples) * split_ratio)
+            # shuffle examples
+            random.shuffle(examples)
+            self.training_examples = examples[:split_index]
+            examples = examples[split_index:]
+        else:
+            self.training_examples = examples
 
         rng = random.Random(0)
         if num_examples:
@@ -106,7 +121,7 @@ class BBEHEval(Eval):
     def __call__(self, sampler: Union[SamplerBase, SamplerBaseWithId]) -> Union[EvalResult, Tuple[EvalResult, List[SingleEvalResult]]]:
         def fn(row: dict):
             prompt_messages = [
-                sampler._pack_message(content=row["input"] + BBEH_SUFFIX, role="user")
+                sampler._pack_message(content=row["input"], role="user")
             ]
             # If sampler is a SamplerBaseWithId, we need to pass the id to the __call__ method
             if isinstance(sampler, SamplerBaseWithId):
@@ -114,7 +129,7 @@ class BBEHEval(Eval):
             else:
                 response_text = sampler(prompt_messages)
 
-            score, extracted_answer = evaluate_correctness(response_text, row["target"], return_extracted_answer=True)
+            score, extracted_answer = self.eval_fn(response_text, row["target"], return_extracted_answer=True)
             html = common.jinja_env.from_string(HTML_JINJA).render(
                 prompt_messages=prompt_messages,
                 next_message=dict(content=response_text, role="assistant"),
@@ -151,3 +166,6 @@ class BBEHEval(Eval):
     
     def eval_fn(self, sample, reference, return_extracted_answer=False):
         return evaluate_correctness(sample, reference, return_extracted_answer=return_extracted_answer)
+    
+    def get_x_y_data(self, example):
+        return example["input"], example["target"]

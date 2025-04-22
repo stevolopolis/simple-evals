@@ -97,7 +97,9 @@ CHOICE_STRINGS = ["CORRECT", "INCORRECT", "NOT_ATTEMPTED"]
 CHOICE_LETTER_TO_STRING = dict(zip(CHOICE_LETTERS, CHOICE_STRINGS))
 
 class SimpleQAEval(Eval):
-    def __init__(self, grader_model: SamplerBase, num_examples: int | None = None, n_repeats: int = 1):
+    def __init__(self, grader_model: SamplerBase, num_examples: int | None = None, n_repeats: int = 1, split_ratio: float | None = None):
+        super().__init__(grader_model, num_examples, n_repeats, split_ratio)
+
         df = pandas.read_csv(
             "https://openaipublic.blob.core.windows.net/simple-evals/simple_qa_test_set.csv"
         )
@@ -106,10 +108,21 @@ class SimpleQAEval(Eval):
         df['id'] = df.index
 
         examples = [row.to_dict() for _, row in df.iterrows()]
+        
+        if split_ratio:
+            split_index = int(len(examples) * split_ratio)
+            # shuffle examples
+            random.shuffle(examples)
+            self.training_examples = examples[:split_index]
+            examples = examples[split_index:]
+        else:
+            self.training_examples = examples
+        
         if num_examples:
             assert n_repeats == 1, "n_repeats only supported when max_examples = None"
             rng = random.Random(0)
             examples = rng.sample(examples, num_examples)
+            
         self.examples = examples * n_repeats
         self.grader_model = grader_model
 
@@ -134,8 +147,9 @@ class SimpleQAEval(Eval):
 
     def __call__(self, sampler: SamplerBase) -> EvalResult:
             def fn(row: dict):
+                input_, target = self.get_x_y_data(row)
                 prompt_messages = [
-                    sampler._pack_message(content=row.get("problem", ""), role="user")
+                    sampler._pack_message(content=input_, role="user")
                 ]
 
                 # If sampler is a SamplerBaseWithId, we need to pass the id to the __call__ method
@@ -144,14 +158,7 @@ class SimpleQAEval(Eval):
                 else:
                     response_text = sampler(prompt_messages)
 
-                grade_letter = self.grade_sample(row.get("problem", ""), row.get("answer", ""), response_text)
-                
-                # Metrics based on grading response
-                is_correct = grade_letter == "A"
-                is_incorrect = grade_letter == "B"
-                is_not_attempted = grade_letter == "C"
-                
-                score = is_correct
+                score, (grade_letter, is_correct, is_incorrect, is_not_attempted) = self.eval_fn(response_text, target, return_extracted_answer=True)
 
                 # Create HTML for each sample result
                 html = common.jinja_env.from_string(common.HTML_JINJA).render(
@@ -227,4 +234,22 @@ class SimpleQAEval(Eval):
             
             return common.aggregate_results(results)
     
+    def eval_fn(self, sample, reference, return_extracted_answer=False):
+        grade_letter = self.grade_sample(reference.get("problem", ""), reference.get("answer", ""), sample)
+                
+        # Metrics based on grading response
+        is_correct = grade_letter == "A"
+        is_incorrect = grade_letter == "B"
+        is_not_attempted = grade_letter == "C"
+        
+        score = is_correct
 
+        if return_extracted_answer:
+            return score, (grade_letter, is_correct, is_incorrect, is_not_attempted)
+        return score
+
+    def get_x_y_data(self, example):
+        x = example.get("problem", "")
+        y = example
+
+        return x, y

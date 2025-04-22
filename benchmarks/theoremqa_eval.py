@@ -40,7 +40,9 @@ class TheoremQAEval(Eval):
         self,
         n_repeats: int = 4,
         num_examples: int | None = None,  # restrict to a subset of the data for debugging
+        split_ratio: float | None = None  # split the data into training and evaluation sets
     ):
+        super().__init__(n_repeats, num_examples, split_ratio)
         # Setup answer parser
         self.answer_parser = DefaultParser()
 
@@ -49,6 +51,15 @@ class TheoremQAEval(Eval):
         examples = [dict(row) | {"id": i} for i, row in enumerate(dataset["test"])]
 
         print(f"TheoremQA: {len(examples)} examples")
+
+        if split_ratio:
+            split_index = int(len(examples) * split_ratio)
+            # shuffle examples
+            random.shuffle(examples)
+            self.training_examples = examples[:split_index]
+            examples = examples[split_index:]
+        else:
+            self.training_examples = examples
 
         rng = random.Random(0)
         if num_examples:
@@ -65,9 +76,10 @@ class TheoremQAEval(Eval):
     
     def __call__(self, sampler: Union[SamplerBase, SamplerBaseWithId]) -> Union[EvalResult, Tuple[EvalResult, List[SingleEvalResult]]]:
         def fn(row: dict):
+            input_, target = self.get_x_y_data(row)
             # Prepare the question content
             content = [
-                sampler._handle_text(THEOREMQA_DEFAULT_PROMPT.format(problem=row["Question"], answer_format=self.answer_parser.answer_pattern))
+                sampler._handle_text(input_)
             ]
             # If the question includes an image, we need to add it to the prompt
             if row["Picture"] is not None:
@@ -88,14 +100,13 @@ class TheoremQAEval(Eval):
             else:
                 response_text = sampler(prompt_messages)
 
-            extracted_answer = answer_clean_with_parser(self.answer_parser, response_text)
-            score = compare_answer_with_groundtruth(extracted_answer, row["Answer"])
+            score, extracted_answer = self.eval_fn(response_text, target, return_extracted_answer=True)
 
             html = common.jinja_env.from_string(HTML_JINJA).render(
                 prompt_messages=prompt_messages,
                 next_message=dict(content=response_text, role="assistant"),
                 score=score,
-                correct_answer=row["Answer"],
+                correct_answer=target,
                 extracted_answer=extracted_answer,
             )
             convo = prompt_messages + [dict(content=response_text, role="assistant")]
@@ -125,3 +136,14 @@ class TheoremQAEval(Eval):
         results = common.map_with_progress(fn, self.examples)
         return common.aggregate_results(results)
     
+    def eval_fn(self, sample, reference, return_extracted_answer=False):
+        extracted_answer = answer_clean_with_parser(self.answer_parser, sample)
+        score = compare_answer_with_groundtruth(extracted_answer, reference)
+        if return_extracted_answer:
+            return score, extracted_answer
+        return score
+
+    def get_x_y_data(self, example):
+        x = THEOREMQA_DEFAULT_PROMPT.format(problem=example["Question"], answer_format=self.answer_parser.answer_pattern)
+        y = example["Answer"]
+        return x, y

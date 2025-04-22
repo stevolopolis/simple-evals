@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Any
 
+from torch.utils.data import DataLoader
+
 Message = dict[str, Any]  # keys role, content
 MessageList = list[Message]
 
@@ -77,6 +79,30 @@ class Eval:
     """
     Base class for defining an evaluation.
     """
-
     def __call__(self, sampler: SamplerBase) -> EvalResult:
         raise NotImplementedError
+    
+    def get_data(self):
+        return self.examples
+    
+    def eval_fn(self, sample, reference, **kwargs):
+        raise NotImplementedError
+    
+    def get_x_y_data(self, example):
+        raise NotImplementedError
+    
+    def get_train_data_loader(self, batch_size: int = 16, shuffle: bool = True):
+        # parse examples into simple (x, y) pairs
+        training_data = []
+        for example in self.training_examples:
+            training_data.append(self.get_x_y_data(example))
+
+        return DataLoader(training_data, batch_size=batch_size, shuffle=shuffle)
+    
+    def get_eval_data_loader(self, batch_size: int = 16, shuffle: bool = True):
+        # parse examples into simple (x, y) pairs
+        eval_data = []
+        for example in self.examples:
+            eval_data.append(self.get_x_y_data(example))
+
+        return DataLoader(eval_data, batch_size=batch_size, shuffle=shuffle)

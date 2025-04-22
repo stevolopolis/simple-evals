@@ -64,7 +64,9 @@ def decrypt(ciphertext_b64: str, password: str) -> str:
 
 
 class BrowseCompEval(Eval):
-    def __init__(self, grader_model: SamplerBase, num_examples: int | None = None, n_repeats: int = 1):
+    def __init__(self, grader_model: SamplerBase, num_examples: int | None = None, n_repeats: int = 1, split_ratio: float | None = None):
+        super().__init__() 
+        
         df = pandas.read_csv(
             "https://openaipublic.blob.core.windows.net/simple-evals/browse_comp_test_set.csv"
         )
@@ -73,6 +75,16 @@ class BrowseCompEval(Eval):
         df['id'] = df.index
 
         examples = [row.to_dict() for _, row in df.iterrows()]
+
+        if split_ratio:
+            split_index = int(len(examples) * split_ratio)
+            # shuffle examples
+            random.shuffle(examples)
+            self.training_examples = examples[:split_index]
+            examples = examples[split_index:]
+        else:
+            self.training_examples = examples
+
         if num_examples:
             assert n_repeats == 1, "n_repeats only supported when max_examples = None"
             rng = random.Random(0)

@@ -32,7 +32,9 @@ class SonnetEval(Eval):
         self,
         n_repeats: int = 4,
         num_examples: int | None = None,  # restrict to a subset of the data for debugging
+        split_ratio: float | None = None  # split the data into training and evaluation sets
     ):
+        super().__init__(n_repeats)
         # Init answer pattern
         self.answer_pattern = common.DefaultParser()
 
@@ -50,6 +52,15 @@ class SonnetEval(Eval):
 
         print(f"Sonnet: {len(examples)} examples")
 
+        if split_ratio:
+            split_index = int(len(examples) * split_ratio)
+            # shuffle examples
+            random.shuffle(examples)
+            self.training_examples = examples[:split_index]
+            examples = examples[split_index:]
+        else:
+            self.training_examples = examples
+
         rng = random.Random(0)
         if num_examples:
             assert n_repeats == 1, "n_repeats only supported for num_examples = None"
@@ -65,9 +76,10 @@ class SonnetEval(Eval):
     
     def __call__(self, sampler: Union[SamplerBase, SamplerBaseWithId]) -> Union[EvalResult, Tuple[EvalResult, List[SingleEvalResult]]]:
         def fn(row: dict):
+            input_, target = self.get_x_y_data(row)
             prompt_messages = [
                 sampler._pack_message(
-                    content=SONNET_PROMPT.format(**row),
+                    content=input_,
                     role="user"
                 )
             ]
@@ -77,8 +89,7 @@ class SonnetEval(Eval):
             else:
                 response_text = sampler(prompt_messages)
 
-            extracted_answer = self.answer_pattern.parse(response_text)
-            score = self.check_sonnet_errors(extracted_answer, row["target"])
+            score, extracted_answer = self.eval_fn(response_text, target, return_extracted_answer=True)
             html = common.jinja_env.from_string(HTML_JINJA).render(
                 prompt_messages=prompt_messages,
                 next_message=dict(content=response_text, role="assistant"),
@@ -96,9 +107,9 @@ class SonnetEval(Eval):
                     task=self.name,
                     id=row["id"],
                     problem=SingleProblem(
-                        instruction=SONNET_PROMPT.format(**row),
+                        instruction=input_,
                         input=row["input"],
-                        target=row["target"]
+                        target=target
                     ),
                     output=response_text,
                     answer=extracted_answer,
@@ -125,3 +136,15 @@ class SonnetEval(Eval):
             return False
         except Exception as e:
             return False
+        
+    def eval_fn(self, sample, reference, return_extracted_answer=False):
+        extracted_answer = self.answer_pattern.parse(sample)
+        score = self.check_sonnet_errors(extracted_answer, reference)
+        if return_extracted_answer:
+            return score, extracted_answer
+        return score
+        
+    def get_x_y_data(self, example):
+        x = SONNET_PROMPT.format(**example)
+        y = example["target"]
+        return x, y 

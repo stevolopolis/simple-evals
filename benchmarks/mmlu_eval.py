@@ -82,7 +82,8 @@ subject2category = {
 
 
 class MMLUEval(Eval):
-    def __init__(self, num_examples: int | None = None, language: str = "EN-US"):
+    def __init__(self, num_examples: int | None = None, language: str = "EN-US", split_ratio: float | None = None):
+        super().__init__()
         if language != "EN-US":
             url = f"https://openaipublic.blob.core.windows.net/simple-evals/mmlu_{language}.csv"
         else:
@@ -93,6 +94,16 @@ class MMLUEval(Eval):
         df['id'] = df.index
 
         examples = [row.to_dict() for _, row in df.iterrows()]
+
+        if split_ratio:
+            split_index = int(len(examples) * split_ratio)
+            # shuffle examples
+            random.shuffle(examples)
+            self.training_examples = examples[:split_index]
+            examples = examples[split_index:]
+        else:
+            self.training_examples = examples
+
         if num_examples:
             examples = random.Random(0).sample(examples, num_examples)
         self.examples = examples
@@ -103,9 +114,10 @@ class MMLUEval(Eval):
 
     def __call__(self, sampler: SamplerBase) -> EvalResult:
         def fn(row: dict):
+            input_, target = self.get_x_y_data(row)
             prompt_messages = [
                 sampler._pack_message(
-                    content=format_multichoice_question(row), role="user"
+                    content=input_, role="user"
                 )
             ]
             # If sampler is a SamplerBaseWithId, we need to pass the id to the __call__ method
@@ -114,20 +126,12 @@ class MMLUEval(Eval):
             else:
                 response_text = sampler(prompt_messages)
 
-            response_text = normalize_response(response_text)
-            extracted_answer = None
-            for answer_regex in MULTILINGUAL_ANSWER_REGEXES:
-                regex = MULTILINGUAL_ANSWER_PATTERN_TEMPLATE.format(answer_regex)
-                match = re.search(regex, response_text)
-                if match:
-                    extracted_answer = normalize_extracted_answer(match.group(1))
-                    break
-            score = 1.0 if extracted_answer == row["Answer"] else 0.0
+            score, extracted_answer = self.eval_fn(response_text, target, return_extracted_answer=True)
             html = common.jinja_env.from_string(HTML_JINJA).render(
                 prompt_messages=prompt_messages,
                 next_message=dict(content=response_text, role="assistant"),
                 score=score,
-                correct_answer=row["Answer"],
+                correct_answer=target,
                 extracted_answer=extracted_answer,
             )
             convo = prompt_messages + [dict(content=response_text, role="assistant")]
@@ -140,7 +144,7 @@ class MMLUEval(Eval):
                 single_result = SingleResult(
                     task=self.name,
                     id=row["id"],
-                    problem=SingleProblem(instruction=format_multichoice_question(row), input=row["Question"], target=row["Answer"]),
+                    problem=SingleProblem(instruction=input_, input=row["Question"], target=target),
                     output=response_text,
                     answer=extracted_answer,
                     score=score
@@ -157,3 +161,22 @@ class MMLUEval(Eval):
 
         results = common.map_with_progress(fn, self.examples)
         return common.aggregate_results(results)
+
+    def get_x_y_data(self, example):
+        x = format_multichoice_question(example)
+        y = example["Answer"]
+        return x, y
+    
+    def eval_fn(self, sample, reference, return_extracted_answer=False):
+        response_text = normalize_response(sample)
+        extracted_answer = None
+        for answer_regex in MULTILINGUAL_ANSWER_REGEXES:
+            regex = MULTILINGUAL_ANSWER_PATTERN_TEMPLATE.format(answer_regex)
+            match = re.search(regex, response_text)
+            if match:
+                extracted_answer = normalize_extracted_answer(match.group(1))
+                break
+        score = 1.0 if extracted_answer == reference else 0.0
+        if return_extracted_answer:
+            return score, extracted_answer
+        return score

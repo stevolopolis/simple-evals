@@ -7,6 +7,7 @@ https://arxiv.org/abs/2210.03057 reference: https://github.com/google-research/u
 
 import re
 from typing import Optional
+import random
 
 from . import common
 from .mmlu_eval import HTML_JINJA
@@ -132,7 +133,9 @@ class MGSMEval(Eval):
         self,
         num_examples_per_lang: int = 250,  # restrict to a subset of the data for debugging
         languages: Optional[list[str]] = ALL_LANGUAGES,
+        split_ratio: float | None = None  # split the data into training and evaluation sets
     ):
+        super().__init__()
         if languages is None:
             languages = ALL_LANGUAGES
         else:
@@ -149,6 +152,16 @@ class MGSMEval(Eval):
         for lang in self._languages:
             lang_examples = get_lang_examples(lang)
             examples.extend(lang_examples[: self._num_examples_per_lang])
+
+        if split_ratio:
+            split_index = int(len(examples) * split_ratio)
+            # shuffle examples
+            random.shuffle(examples)
+            self.training_examples = examples[:split_index]
+            examples = examples[split_index:]
+        else:
+            self.training_examples = examples
+
         self.examples = examples
 
     @property
@@ -158,12 +171,14 @@ class MGSMEval(Eval):
     def __call__(self, sampler: SamplerBase) -> EvalResult:
         def fn(example: dict[str, str]):
             language = example["lang"]
-            latin_language = "group_latin" if language in LATIN_LANGUAGES else "group_non_latin"
-            correct_answer = example["targets"]
             instruction = LANG_TO_INSTRUCTIONS[language]
+            latin_language = "group_latin" if language in LATIN_LANGUAGES else "group_non_latin"
+
+            input_, target = self.get_x_y_data(example)
+            
             prompt_messages = [
                 sampler._pack_message(
-                    content=instruction.format(input=example["inputs"]), role="user"
+                    content=input_, role="user"
                 )
             ]
             try:
@@ -178,12 +193,12 @@ class MGSMEval(Eval):
             answer_prefix = LANG_TO_ANSWER_PREFIX[language]
             extracted_answer = parse_answer(response_text, answer_prefix)
 
-            score = score_mgsm(correct_answer, extracted_answer)
+            score = score_mgsm(target, extracted_answer)
             html = common.jinja_env.from_string(HTML_JINJA).render(
                 prompt_messages=prompt_messages,
                 next_message=dict(content=response_text, role="assistant"),
                 score=score,
-                correct_answer=correct_answer,
+                correct_answer=target,
                 extracted_answer=extracted_answer or None,
             )
             convo = prompt_messages + [dict(content=response_text, role="assistant")]
@@ -200,7 +215,7 @@ class MGSMEval(Eval):
                 single_result = SingleResult(
                     task=self.name,
                     id=example["id"],
-                    problem=SingleProblem(instruction=instruction, input=example["inputs"], target=correct_answer),
+                    problem=SingleProblem(instruction=instruction, input=example["inputs"], target=target),
                     output=response_text,
                     answer=extracted_answer,
                     score=score
@@ -217,3 +232,20 @@ class MGSMEval(Eval):
         
         results = common.map_with_progress(fn, self.examples)
         return common.aggregate_results(results, default_stats=("mean", "std"))
+
+    def eval_fn(self, sample, reference, language=None):
+        answer_prefix = LANG_TO_ANSWER_PREFIX[language]
+        extracted_answer = parse_answer(sample, answer_prefix)
+
+        score = score_mgsm(reference, extracted_answer)
+
+        return score
+
+    def get_x_y_data(self, example):
+        language = example["lang"]
+        instruction = LANG_TO_INSTRUCTIONS[language]
+
+        x = instruction.format(input=example["inputs"])
+        y = example["targets"]
+
+        return x, y
