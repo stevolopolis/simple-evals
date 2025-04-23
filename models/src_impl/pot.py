@@ -22,7 +22,7 @@ def safe_execute(code_string: str, keys=None):
     return ans
 
 
-def safe_execute_subprocess(code_string: str, keys=None):
+def safe_execute_subprocess(code_string: str, keys=None, split_key="Answer: "):
     def execute(x):
         try:
             result = subprocess.run(
@@ -30,7 +30,10 @@ def safe_execute_subprocess(code_string: str, keys=None):
                 capture_output=True,
                 text=True
             )
-            return result.stdout.strip().split("Answer: ")[1]
+            if split_key is not None:
+                return result.stdout.strip().split(split_key)[1]
+            else:
+                return result.stdout.strip()
         except Exception:
             return None
     try:

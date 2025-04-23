@@ -10,7 +10,9 @@ model_methods = {
     "sr": SelfRefineModel,
     "dspy": DspyModel,
     "dspy-cot": DspyCoTModel,
-    "dspy-pot": DspyPotModel
+    "dspy-pot": DspyPotModel,
+    "tg": TGModel,
+    "meta": MetaModel
 }
 
 
